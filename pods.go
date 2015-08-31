@@ -23,6 +23,8 @@ import (
 	"github.com/fabric8io/kubist/labels"
 )
 
+var _ PodResource = &pods{}
+
 type pods struct {
 	hc   *http.Client
 	base string
@@ -54,7 +56,11 @@ func (p *pods) List(labels labels.Selector, fields fields.Selector) (*api.PodLis
 }
 
 func (p *pods) Replace(pod api.Pod) (*api.Pod, error) {
-	return &api.Pod{}, nil
+	targetPod := &api.Pod{}
+	u := path.Join(p.base, pod.ObjectMeta.Name)
+	pod.ObjectMeta.ResourceVersion = ""
+	err := doPut(p.hc, u, pod, targetPod)
+	return targetPod, err
 }
 
 func (p *pods) Delete(name string) error {
@@ -77,7 +83,7 @@ func (p *pods) DeleteList(labels labels.Selector, fields fields.Selector) error 
 	return nil
 }
 
-func (p *pods) Create(pod *api.Pod) (*api.Pod, error) {
+func (p *pods) Create(pod api.Pod) (*api.Pod, error) {
 	resp := &api.Pod{}
 	err := doPost(p.hc, p.base, pod, resp)
 	return resp, err

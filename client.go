@@ -28,19 +28,6 @@ type client struct {
 	hc *http.Client
 }
 
-func (c *client) Namespace(namespace string) NamespacedClient {
-	return &namespacedClient{c, namespace}
-}
-
-func (c *client) Pods() PodReader {
-	return newPods(c.hc, "")
-}
-
-type namespacedClient struct {
-	*client
-	namespace string
-}
-
-func (c *namespacedClient) Pods() PodReadWriter {
-	return newPods(c.hc, c.namespace)
+func (c *client) Pods(namespace string) PodResource {
+	return newPods(c.hc, namespace)
 }

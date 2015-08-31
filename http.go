@@ -14,11 +14,11 @@
 package kubist
 
 import (
-	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -139,6 +139,24 @@ func cloneRequest(r *http.Request) *http.Request {
 	return r2
 }
 
+func handleResponseWithBody(successCode int, hc *http.Client, req *http.Request, respObj interface{}) error {
+	resp, err := hc.Do(req)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != successCode {
+		return handleError(resp)
+	}
+
+	defer resp.Body.Close()
+
+	err = json.NewDecoder(resp.Body).Decode(respObj)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func handleError(r *http.Response) error {
 	defer r.Body.Close()
 
@@ -159,22 +177,13 @@ func handleError(r *http.Response) error {
 	return e
 }
 
-func doGet(hc *http.Client, path string, o interface{}) error {
-	r, err := hc.Get(path)
+func doGet(hc *http.Client, path string, respObj interface{}) error {
+	req, err := http.NewRequest("GET", path, nil)
 	if err != nil {
 		return err
 	}
-	if r.StatusCode != http.StatusOK {
-		return handleError(r)
-	}
 
-	defer r.Body.Close()
-
-	err = json.NewDecoder(r.Body).Decode(o)
-	if err != nil {
-		return err
-	}
-	return nil
+	return handleResponseWithBody(http.StatusOK, hc, req, respObj)
 }
 
 func doDelete(hc *http.Client, path string) error {
@@ -190,22 +199,32 @@ func doDelete(hc *http.Client, path string) error {
 	return nil
 }
 
+func doWithBody(verb string, hc *http.Client, path string, reqObj interface{}, respObj interface{}) error {
+	r, w := io.Pipe()
+	go func() {
+		defer w.Close()
+		json.NewEncoder(w).Encode(reqObj)
+	}()
+
+	req, err := http.NewRequest(verb, path, r)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	successCode := http.StatusOK
+	switch verb {
+	case "POST":
+		successCode = http.StatusCreated
+	}
+
+	return handleResponseWithBody(successCode, hc, req, respObj)
+}
+
 func doPost(hc *http.Client, path string, reqObj interface{}, respObj interface{}) error {
-	contentJson, _ := json.Marshal(reqObj)
-	contentReader := bytes.NewReader(contentJson)
-	r, err := hc.Post(path, "application/json", contentReader)
-	if err != nil {
-		return err
-	}
-	if r.StatusCode != http.StatusOK {
-		return handleError(r)
-	}
+	return doWithBody("POST", hc, path, reqObj, respObj)
+}
 
-	defer r.Body.Close()
-
-	err = json.NewDecoder(r.Body).Decode(respObj)
-	if err != nil {
-		return err
-	}
-	return nil
+func doPut(hc *http.Client, path string, reqObj interface{}, respObj interface{}) error {
+	return doWithBody("PUT", hc, path, reqObj, respObj)
 }

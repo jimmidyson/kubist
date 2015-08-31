@@ -21,26 +21,13 @@ import (
 )
 
 type Client interface {
-	Namespace(namespace string) NamespacedClient
-	Pods() PodReader
+	Pods(namespace string) PodResource
 }
 
-type NamespacedClient interface {
-	Pods() PodReadWriter
-}
-
-type ResourceReadWriter interface {
-	Pods() PodReadWriter
-}
-
-type PodReader interface {
-	List(labels.Selector, fields.Selector) (*api.PodList, error)
-}
-
-type PodReadWriter interface {
-	PodReader
+type PodResource interface {
 	Get(name string) (*api.Pod, error)
-	Create(pod *api.Pod) (*api.Pod, error)
+	List(labels.Selector, fields.Selector) (*api.PodList, error)
+	Create(pod api.Pod) (*api.Pod, error)
 	Replace(pod api.Pod) (*api.Pod, error)
 	Delete(name string) error
 	DeleteList(labels.Selector, fields.Selector) error
